@@ -47,21 +47,27 @@ func CreateUserController(c echo.Context) error {
 func GetOneUserController(c echo.Context) error {
 	id, e := strconv.Atoi(c.Param("id"))
 	if e != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]interface{}{
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "failed",
 			"message": "false param",
 		})
 	}
 	user, rowAffected, err := database.GetUser(id)
 
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "failed",
+			"message": "failed to get data user",
+		})
 	}
 	if rowAffected == 0 {
 		return c.JSON(http.StatusOK, map[string]interface{}{
+			"status":  "success",
 			"message": "user id not found",
 		})
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "success",
 		"message": "success",
 		"data":    user,
 	})
@@ -74,7 +80,8 @@ func UpdateUserController(c echo.Context) error {
 
 	id, e := strconv.Atoi(c.Param("id"))
 	if e != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]interface{}{
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "failed",
 			"message": "false param",
 		})
 	}
@@ -84,17 +91,20 @@ func UpdateUserController(c echo.Context) error {
 	resultUser, rowsAffected, err := database.EditUser(&user, id)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"message": "failed",
+			"status":  "failed",
+			"message": "failed to update data user",
 		})
 	}
 
 	if rowsAffected == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "success",
 			"message": "wrong user id",
 		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "success",
 		"message": "success update user",
 		"data":    resultUser,
 	})
@@ -104,20 +114,26 @@ func UpdateUserController(c echo.Context) error {
 func DeleteUserController(c echo.Context) error {
 	id, e := strconv.Atoi(c.Param("id"))
 	if e != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]interface{}{
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "failed",
 			"message": "false param",
 		})
 	}
 	_, rowAffected, err := database.DeleteUser(id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "failed",
+			"message": "failed delete user",
+		})
 	}
 	if rowAffected == 0 {
 		return c.JSON(http.StatusOK, map[string]interface{}{
+			"status":  "success",
 			"message": "user id not found",
 		})
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "success",
 		"message": "success delete user",
 		"iduser":  id,
 	})
@@ -174,4 +190,8 @@ func GetUserDetailController(c echo.Context) error {
 		"message": "success get detail user",
 		"data":    users,
 	})
+}
+
+func GetUserDetailControllerTesting() echo.HandlerFunc {
+	return GetUserDetailController
 }

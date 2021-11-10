@@ -2,14 +2,18 @@ package controllers
 
 import (
 	"alta/be4/mvc/config"
+	"alta/be4/mvc/constants"
+	"alta/be4/mvc/middlewares"
 	"alta/be4/mvc/models"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,27 +63,28 @@ func TestGetUsersControllerSuccess(t *testing.T) {
 		name       string
 		path       string
 		expectCode int
-		size       int
+		expectSize int
 	}{
 		{
-			name:       "success",
+			name:       "success to get all data users",
 			path:       "/users",
-			expectCode: 200,
-			size:       1,
+			expectCode: http.StatusOK,
+			expectSize: 1,
 		},
 	}
 
 	e := InitEchoTestAPI()
+	//add data user to table users
 	InsertMockDataUserToDB()
 	req := httptest.NewRequest(http.MethodGet, "/users", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	context := e.NewContext(req, rec)
 
 	for index, testCase := range testCases {
-		c.SetPath(testCase.path)
+		context.SetPath(testCase.path)
 
 		// Assertions
-		if assert.NoError(t, GetUsersController(c)) {
+		if assert.NoError(t, GetUsersController(context)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 			body := rec.Body.String()
 			var responses UsersResponseSuccess
@@ -87,9 +92,8 @@ func TestGetUsersControllerSuccess(t *testing.T) {
 			if err != nil {
 				assert.Error(t, err, "error")
 			}
-			assert.Equal(t, testCases[index].size, len(responses.Data))
-			// assert.Equal(t, userJSON, rec.Body.String())
-			// assert.True(t, strings.HasPrefix(body, testCase.expectBodyStartsWith))
+			assert.Equal(t, testCases[index].expectSize, len(responses.Data))
+			assert.Equal(t, "alta", responses.Data[0].Name)
 
 		}
 	}
@@ -103,9 +107,9 @@ func TestGetUsersControllerTableNotFound(t *testing.T) {
 		expectCode int
 	}{
 
-		name:       "failed",
+		name:       "failed to get all data users",
 		path:       "/users",
-		expectCode: 400,
+		expectCode: http.StatusBadRequest,
 	}
 
 	e := InitEchoTestAPI()
@@ -140,7 +144,7 @@ func TestCreateUserControllerSuccess(t *testing.T) {
 		expectCode int
 	}{
 
-		name:       "success",
+		name:       "success to create user",
 		path:       "/users",
 		expectCode: http.StatusOK,
 	}
@@ -183,7 +187,7 @@ func TestCreateUserControllerFailed(t *testing.T) {
 		expectCode int
 	}{
 
-		name:       "failed",
+		name:       "failed to create user",
 		path:       "/users",
 		expectCode: 400,
 	}
@@ -211,4 +215,157 @@ func TestCreateUserControllerFailed(t *testing.T) {
 		assert.Equal(t, testCases.expectCode, rec.Code)
 		assert.Equal(t, "failed", user.Status)
 	}
+}
+
+func TestGetOneUserControllerSuccess(t *testing.T) {
+	var testCases = struct {
+		name       string
+		path       string
+		expectCode int
+	}{
+
+		name:       "success to get one data user",
+		path:       "/users/:id",
+		expectCode: http.StatusOK,
+	}
+
+	e := InitEchoTestAPI()
+	InsertMockDataUserToDB()
+	req := httptest.NewRequest(http.MethodGet, "/users/:id", nil)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	res := httptest.NewRecorder()
+	context := e.NewContext(req, res)
+	context.SetPath(testCases.path)
+	context.SetParamNames("id")
+	context.SetParamValues("1")
+
+	if assert.NoError(t, GetOneUserController(context)) {
+
+		var response SingleUserResponseSuccess
+		res_body := res.Body.String()
+		err := json.Unmarshal([]byte(res_body), &response)
+		if err != nil {
+			assert.Error(t, err, "error")
+		}
+
+		assert.Equal(t, testCases.expectCode, res.Code)
+		assert.Equal(t, "alta", response.Data.Name)
+
+	}
+}
+
+func TestGetOneUserControllerFailedChar(t *testing.T) {
+	var testCases = struct {
+		name       string
+		path       string
+		expectCode int
+	}{
+
+		name:       "failed to get one data user",
+		path:       "/users/:id",
+		expectCode: http.StatusBadRequest,
+	}
+
+	e := InitEchoTestAPI()
+	InsertMockDataUserToDB()
+	req := httptest.NewRequest(http.MethodGet, "/users/:id", nil)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	res := httptest.NewRecorder()
+	context := e.NewContext(req, res)
+	context.SetPath(testCases.path)
+	context.SetParamNames("id")
+	context.SetParamValues("#")
+
+	// type Response struct {
+	// 	Message string      `json:"message"`
+	// 	Data    models.User `json:"data"`
+	// }
+
+	if assert.NoError(t, GetOneUserController(context)) {
+
+		var response SingleUserResponseSuccess
+		res_body := res.Body.String()
+		err := json.Unmarshal([]byte(res_body), &response)
+		if err != nil {
+			assert.Error(t, err, "error")
+		}
+
+		assert.Equal(t, testCases.expectCode, res.Code)
+		assert.Equal(t, "failed", response.Status)
+
+	}
+}
+
+//get user detail controller using jwt
+func TestGetUserDetailControllerSuccess(t *testing.T) {
+	var testCases = struct {
+		name       string
+		path       string
+		expectCode int
+	}{
+
+		name:       "get user detail using jwt",
+		path:       "/jwt/users/:id",
+		expectCode: http.StatusOK,
+	}
+
+	mock_user2 := models.User{
+		Name:     "alta",
+		Password: "12345",
+		Email:    "alta@gmail.com",
+	}
+
+	e := InitEchoTestAPI()
+	InsertMockDataUserToDB()
+
+	//create token
+	var user models.User
+	tx := config.DB.Where("email = ? AND password = ?", mock_user2.Email, mock_user2.Password).First(&user)
+	if tx.Error != nil {
+		t.Error(tx.Error)
+	}
+	token, err := middlewares.CreateToken(int(user.ID))
+	if err != nil {
+		panic(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %v", token))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	res := httptest.NewRecorder()
+	context := e.NewContext(req, res)
+	context.SetPath(testCases.path)
+	context.SetParamNames("id")
+	context.SetParamValues("1")
+	middleware.JWT([]byte(constants.SECRET_JWT))(GetUserDetailControllerTesting())(context)
+
+	// type Response struct {
+	// 	Message string      `json:"message"`
+	// 	Data    models.User `json:"data"`
+	// }
+
+	var response SingleUserResponseSuccess
+
+	res_body := res.Body.String()
+	json.Unmarshal([]byte(res_body), &response)
+
+	t.Run("GET /jwt/users/:id", func(t *testing.T) {
+		assert.Equal(t, testCases.expectCode, res.Code)
+		assert.Equal(t, "alta", response.Data.Name)
+		assert.Equal(t, "alta@gmail.com", response.Data.Email)
+	})
+
+	// if assert.NoError(t, GetUserDetailControllers(context)) {
+
+	// 	var response Response
+	// 	res_body := res.Body.String()
+	// 	err := json.Unmarshal([]byte(res_body), &response)
+	// 	if err != nil {
+	// 		assert.Error(t, err, "error")
+	// 	}
+
+	// 	assert.Equal(t, testCases.expectCode, res.Code)
+	// 	assert.Equal(t, "alta", response.Data.Name)
+
+	// }
 }
